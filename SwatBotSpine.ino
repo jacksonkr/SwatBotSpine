@@ -41,7 +41,6 @@ ESCController* ec;
 void setup() {
   Serial.begin(115200);
   Serial.println("booting up...");
-  Serial.println("HERE");
   
   SetRCInterrupts(); // for reading rc inputs / pinchanginterrupt
 
