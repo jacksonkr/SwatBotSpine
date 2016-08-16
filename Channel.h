@@ -9,13 +9,22 @@ class Channel {
   protected:
     String _type;
     int _inPin;
-    int _outPin;
     int _high;
     int _low;
   public:
     void loop();
+    void setValue(int v) {
+      this->_value = v;
+    }
     int getValue() {
       return this->_value;
+    }
+    double getPerc() {
+      double p = map(this->_value, this->_low, this->_high, 0, 1000);
+      p /= 1000;
+      if(p > 1) p = 1;
+      if(p < 0) p = 0;
+      return p;
     }
     String getType() {
       return _type;
@@ -25,66 +34,58 @@ class Channel {
     static const String AILERON;
     static const String THROTTLE;
     static const String RUDDER;
-    static const String RANGE_A;
-    static const String RANGE_B;
+    static const String AUX1;
+    static const String AUX2;
 
-    Channel(String type, int inPin, int outPin, int high, int low);
+    static const int PWM_MAX;
+    static const int PWM_HIGH;
+    static const int PWM_LOW;
+    static const int PWM_NOSPIN;
+    static const int PWM_OFF;
+
+    Channel(String type, int inPin, int low, int high);
 };
 
 const String Channel::ELEVATOR = "elevator";
 const String Channel::AILERON  = "aileron";
 const String Channel::THROTTLE = "throttle";
 const String Channel::RUDDER   = "rudder";
-const String Channel::RANGE_A  = "range_a";
-const String Channel::RANGE_B  = "range_b";
+const String Channel::AUX1     = "aux1";
+const String Channel::AUX2     = "aux2";
 
-Channel::Channel(String type, int inPin, int outPin, int high, int low) {
+const int Channel::PWM_MAX = 180;
+const int Channel::PWM_NOSPIN = 20;
+const int Channel::PWM_OFF = 0;
+
+Channel::Channel(String type, int inPin, int low, int high) {
   this->_type = type;
   this->_inPin = inPin;
-  this->_outPin = outPin;
   this->_high = high;
   this->_low = low;
 
-  // using RCLib + PinChangeInt libs now - jkr
-//  if(this->_inPin != NULL) pinMode(this->_inPin, INPUT);
-  if(this->_outPin != NULL) pinMode(this->_outPin, OUTPUT);
+  this->setValue(0);
+
+//  if(this->_inPin != NULL) pinMode(this->_inPin, INPUT); // input is controlled included library
 }
 
 void Channel::loop() {
-  // INPUT
+// INPUT
+//  Serial.println("Channel Loop");
+  
   if(this->_inPin != NULL) {
-    // using RCLib + PinChangeInt libs now - jkr
-//    this->_pulseIn = pulseIn(this->_inPin, HIGH, 25000);
-//  
-//    if(this->_pulseIn > 0 && true) {
-//      String str = this->getType();
-//      str += " in: ";
-//      str += this->getPulseIn();
-//      Serial.println(str);
-//    }
-
-    int flag;
-    if(flag = getChannelsReceiveInfo()) {
-      for(int i = 0; i < NUM_RC_CHANNELS; ++i) {
-        if(RC_Channel_Pin[i] == this->_inPin) 
-          this->_value = RC_Channel_Value[i];
+    for(int i = 0; i < NUM_RC_CHANNELS; ++i) {
+      if(RC_Channel_Pin[i] == this->_inPin) {
+////        if(this->getType() == "rudder") {
+//          Serial.print("channel input: ");
+//          Serial.print(this->_type);
+//          Serial.print(": ");
+//          Serial.print(RC_Channel_Value[i]);
+//          Serial.println();
+////        }
+        this->setValue(RC_Channel_Value[i]);
       }
     }
   }
-
-  if(this->_outPin != NULL) {
-    
-  }
-    
-  // OUTPUT
-//  float mv = map(this->_pwm, this->_low, this->_high, 0, 255);
-//  analogWrite(this->_pin, mv);
-//
-//  if(false) {
-//    Serial.print(this->_type);
-//    Serial.print(" out: ");
-//    Serial.println(mv);
-//  }
 }
 
 //void Channel::setPWM(int pwm) {
