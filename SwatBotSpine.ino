@@ -11,10 +11,10 @@ const int YAW_MAX = 5;
 const String TYPE_X = "type_x"; // other types not implemented yet TYPE_H, TYPE_P(+)
 const String UAV_TYPE = TYPE_X;
 
-const int PIN_ESC_MOTOR[NUM_ESC_MOTORS] = {8, 9, 10, 11};
+const int PIN_ESC_MOTOR[NUM_ESC_MOTORS] = {8, 9, 10, 11}; 
 
 // next variable names are controlled by rc lib :( -jkr
-const uint8_t RC_Channel_Pin[NUM_RC_CHANNELS] = {2, 3, 18, 19, 20, 21};
+const uint8_t RC_Channel_Pin[NUM_RC_CHANNELS] = {A8,A9,A10,A11,A12,A13};
 uint16_t RC_Channel_Value[NUM_RC_CHANNELS];
 
 #include <SoftwareServo.h>
@@ -41,12 +41,8 @@ ESCController* ec;
 void setup() {
   Serial.begin(115200);
   Serial.println("booting up...");
-  
-  SetRCInterrupts(); // for reading rc inputs / pinchanginterrupt
 
-  // sensors to monitor distance above & below craft.
-  //  above = new UltrasonicSensor(PIN_USENSOR_ABOVE_TRIG, PIN_USENSOR_ABOVE_ECHO);
-//  below = new UltrasonicSensor(PIN_USENSOR_BELOW_TRIG, PIN_USENSOR_BELOW_ECHO);
+  SetRCInterrupts(); // for reading rc inputs / pinchangeinterrupt
 
   rc = new RemoteControl();
   rc->addChannel(new Channel(Channel::ELEVATOR, RC_Channel_Pin[0], 1150, 1850));

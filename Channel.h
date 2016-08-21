@@ -75,13 +75,13 @@ void Channel::loop() {
   if(this->_inPin != NULL) {
     for(int i = 0; i < NUM_RC_CHANNELS; ++i) {
       if(RC_Channel_Pin[i] == this->_inPin) {
-////        if(this->getType() == "rudder") {
-//          Serial.print("channel input: ");
-//          Serial.print(this->_type);
-//          Serial.print(": ");
-//          Serial.print(RC_Channel_Value[i]);
-//          Serial.println();
-////        }
+        if(false && this->getType() == "throttle") {
+          Serial.print("channel input: ");
+          Serial.print(this->_type);
+          Serial.print(": ");
+          Serial.print(RC_Channel_Value[i]);
+          Serial.println();
+        }
         this->setValue(RC_Channel_Value[i]);
       }
     }

@@ -26,7 +26,7 @@ ESC::ESC(int id) {
 //  this->_servo = new SoftwareServo();
   this->_servo.attach(this->_pin);
 
-  if(true) { // debug
+  if(false) { // debug
     Serial.print("ESC construct pin ");
     Serial.println(this->_pin);
   }
@@ -37,7 +37,7 @@ void ESC::setPWM(int pwm) {
     this->_pwm = pwm;
     this->_servo.write(pwm);
 
-    if(true) {
+    if(false) { // debug
       Serial.print(this->_id);
       Serial.print(" ");
       Serial.print(this->_pin);

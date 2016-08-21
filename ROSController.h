@@ -1,9 +1,9 @@
 class ROSController {
   protected:
-    void loop();
     int _throttle;
     bool _is_on = false;
   public:
+    void loop();
     ROSController();
     bool isOn() {
       return this->_is_on;
