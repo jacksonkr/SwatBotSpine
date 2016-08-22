@@ -2,6 +2,7 @@ class RemoteControl {
   protected:
     Channel* _channels[6];
     int _channels_length;
+    int _channel_receive_info;
   public:
     RemoteControl();
     Channel* getChannel(String type);
@@ -11,7 +12,7 @@ class RemoteControl {
     void setup();
     double* getAttitude();
     bool isOn() {
-      return getChannelsReceiveInfo();
+      return _channel_receive_info;
     }
 };
 
@@ -73,7 +74,8 @@ Channel* RemoteControl::getChannel(String type) {
 }
 
 void RemoteControl::loop() {
-//  Serial.println("RC Loop");
+//  Serial.print("RC Loop");
+  this->_channel_receive_info = getChannelsReceiveInfo();
 
   if(this->isOn()) {
     for(int i = 0; i < this->_channels_length; ++i) {
@@ -83,6 +85,7 @@ void RemoteControl::loop() {
       if(false) { // rc debug
         Serial.print(o->getValue());
         Serial.print(" ");
+        Serial.println(millis());
 
         if(i >= this->_channels_length - 1) Serial.println();
       }
