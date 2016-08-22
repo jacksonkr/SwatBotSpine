@@ -11,11 +11,13 @@ const int YAW_MAX = 5;
 const String TYPE_X = "type_x"; // other types not implemented yet TYPE_H, TYPE_P(+)
 const String UAV_TYPE = TYPE_X;
 
-const int PIN_ESC_MOTOR[NUM_ESC_MOTORS] = {8, 9, 10, 11}; 
+const int PIN_ESC_MOTOR[NUM_ESC_MOTORS] = {6,9,10,11}; 
 
 // next variable names are controlled by rc lib :( -jkr
-const uint8_t RC_Channel_Pin[NUM_RC_CHANNELS] = {A8,A9,A10,A11,A12,A13};
+const uint8_t RC_Channel_Pin[NUM_RC_CHANNELS] = {A0,A1,A2,A3,3,5};
 uint16_t RC_Channel_Value[NUM_RC_CHANNELS];
+
+bool armed = false;
 
 #include <SoftwareServo.h>
 #include <PID_v1.h>
@@ -66,7 +68,7 @@ void loop() {
 //  Serial.println("loop");
 
   rc->loop(); // read controls - RC overrides ROS
-//  ros->loop(); // read instructions from ros
+  ros->loop(); // read instructions from ros
   imu->loop(); // get current position
   sc->loop(); // desired RX/ROS input vs IMU input, calc new position
   ec->loop(); // send new position to esc
