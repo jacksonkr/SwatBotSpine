@@ -17,11 +17,7 @@ class StabilityController {
     const double PITCH_MAX = 25;
     const double ROLL_MAX = 25;
     const double YAW_MAX = 5;
-    double* getPIDOutput() {
-      double p = this->_pid_pitch_output / PID_OUTPUT_MAX;
-      double r = this->_pid_roll_output / PID_OUTPUT_MAX;
-      return new double[2] {p, r};
-    }
+    double* getPIDOutput();
 
     static const int PID_KP; 
     static const int PID_KI; 
@@ -38,23 +34,31 @@ StabilityController::StabilityController(RemoteControl* rc, ROSController* ros, 
   this->_imu = imu;
   
   this->_PIDPitch = new PID(&this->_pid_pitch_input, 
-                              &this->_pid_pitch_output, 
-                              &this->_pid_pitch_setpoint, 
-                              StabilityController::PID_KP, 
-                              StabilityController::PID_KI, 
-                              StabilityController::PID_KD, 
-                              DIRECT
-                            );
+                            &this->_pid_pitch_output, 
+                            &this->_pid_pitch_setpoint, 
+                            StabilityController::PID_KP, 
+                            StabilityController::PID_KI, 
+                            StabilityController::PID_KD, 
+                            DIRECT
+                          );
   this->_PIDRoll = new PID(&this->_pid_roll_input, 
-                              &this->_pid_roll_output, &this->_pid_roll_setpoint, 
-                              StabilityController::PID_KP, 
-                              StabilityController::PID_KI, 
-                              StabilityController::PID_KD, 
-                              DIRECT
-                            );
+                           &this->_pid_roll_output, 
+                           &this->_pid_roll_setpoint, 
+                           StabilityController::PID_KP, 
+                           StabilityController::PID_KI, 
+                           StabilityController::PID_KD, 
+                           DIRECT
+                         );
 
   this->_PIDPitch->SetMode(AUTOMATIC);
   this->_PIDRoll->SetMode(AUTOMATIC);
+}
+
+double* StabilityController::getPIDOutput() {
+  double p = this->_pid_pitch_output / PID_OUTPUT_MAX;
+  double r = this->_pid_roll_output / PID_OUTPUT_MAX;
+  
+  return new double[2] {p, r};
 }
 
 void StabilityController::loop() {
@@ -63,20 +67,33 @@ void StabilityController::loop() {
    * get desired drone position
    */
   
-  double* rcAttitude = this->_rc->getAttitude();
-  double rc_pitch, rc_roll, rc_yaw;
-  rc_pitch = rcAttitude[0];
-  rc_roll = rcAttitude[1];
-  rc_yaw = rcAttitude[2];
-  delete [] rcAttitude;
+  double* rAttitude;
+  double r_pitch = 0, r_roll = 0, r_yaw = 0;
 
-  if(false && this->_rc->isOn()) { // debug
+  if(this->_ros->isOn()) {
+    rAttitude = this->_ros->getAttitude();
+    r_pitch = rAttitude[0];
+    r_roll =  rAttitude[1];
+    r_yaw =   rAttitude[2];
+    delete [] rAttitude;
+  }
+  
+  // rc takes precedence
+  if(this->_rc->isOn()) {
+    rAttitude = this->_rc->getAttitude();
+    r_pitch = rAttitude[0];
+    r_roll =  rAttitude[1];
+    r_yaw =   rAttitude[2];
+    delete [] rAttitude;
+  }
+
+  if(false) { // debug
     Serial.print("RC Percs: ");
-    Serial.print(rc_pitch);
+    Serial.print(r_pitch);
     Serial.print(" ");
-    Serial.print(rc_roll);
+    Serial.print(r_roll);
     Serial.print(" ");
-    Serial.println(rc_yaw);
+    Serial.println(r_yaw);
   }
 
   
@@ -89,7 +106,7 @@ void StabilityController::loop() {
   imu_pitch = imuAttitude[0];
   imu_roll  = imuAttitude[1];
   imu_yaw   = imuAttitude[2];
-//  delete imuAttitude;
+//  delete [] imuAttitude;
 
   if(false) {
     Serial.print("imu: ");
@@ -104,7 +121,7 @@ void StabilityController::loop() {
    * compare desired vs current to get error
    */
 
-   // !! I think PID finds the error already?
+   // !! I think PID finds the error already? -jkr
 
 //   // might to use math.abs
 //   double p_error, r_error;
@@ -124,26 +141,27 @@ void StabilityController::loop() {
   this->_pid_pitch_input = imu_pitch;
   this->_pid_roll_input = imu_roll;
 
-  this->_pid_pitch_setpoint = rc_pitch;
-  this->_pid_roll_setpoint = rc_roll;
+  this->_pid_pitch_setpoint = r_pitch;
+  this->_pid_roll_setpoint = r_roll;
 
-  // might need to change pid settings when we are close to the goal
+  // might need to change pid settings when we are close to the goal -jkr
   this->_PIDPitch->Compute();
   this->_PIDRoll->Compute();
 
-  if(false && this->_rc->isOn()) {
-    Serial.print("sc pid pitch: ");
-    Serial.print(this->_pid_pitch_input);
+  if(false) {// && this->_rc->isOn()) {
+    Serial.print("sc pid roll: ");
+    Serial.print(this->_pid_roll_input);
     Serial.print(" ");
-    Serial.print(this->_pid_pitch_setpoint);
+    Serial.print(this->_pid_roll_setpoint);
     Serial.print(" ");
-    Serial.println(this->_pid_pitch_output);
+    Serial.println(this->_pid_roll_output);
   }
 
-  /**
-   * send PID values to motors use pid outputs
-   */
-
-   // this step is taken care of by the ec loop
+  // check the outputs
+  if(false) {
+    Serial.print(this->_pid_pitch_output);
+    Serial.print(" ");
+    Serial.println(this->_pid_roll_output);
+  }
 }
 

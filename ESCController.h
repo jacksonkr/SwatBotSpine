@@ -5,7 +5,7 @@ class ESCController {
      */
     const double THROTTLE_INFLUENCE = 0.8;
     const double PID_INFLUENCE = 0.2;
-  
+
     RemoteControl* _rc;
     ROSController* _ros;
     StabilityController* _sc;
@@ -21,6 +21,20 @@ class ESCController {
     ESCController(RemoteControl* rc, ROSController* ros, StabilityController* sc);
     void setMode(String mode);
     void loop();
+    bool getInitialized() {
+       /**
+       * see if all motors were initialized
+       */
+      bool inited = true;
+      for(int i = 0; i < NUM_ESC_MOTORS; ++i) {
+        ESC* o = this->_escFamily[i];
+        
+        if(o->getInitialized() != true)
+          inited = false;
+        }
+      
+      return inited;
+    }
 };
 
 ESCController::ESCController(RemoteControl* rc, ROSController* ros, StabilityController* sc) {
@@ -80,6 +94,8 @@ void ESCController::loop() {
   if(this->_ros->isOn() == true)
     thr_p = this->_ros->getThrottlePerc();
 
+  if(armed == false) thr_p = Channel::PWM_OFF;
+
 #ifdef SERIAL_IN
   char rin = Serial.read();
   double rin_val = -1;
@@ -105,24 +121,27 @@ void ESCController::loop() {
     double rad = arm_angle / 360 * PI;
     double pitch_mult, roll_mult;
 
-    // STATIC FOR X QUAD
-    switch(i){
-      case 0:
-        pitch_mult = 1;
-        roll_mult = -1;
+    //todo: make this dynamic to fit any style uas
+    if(NUM_ESC_MOTORS == 4) {
+      // STATIC FOR X QUAD
+      switch(i){
+        case 0:
+          pitch_mult = 1;
+          roll_mult = -1;
+          break;
+        case 1:
+          pitch_mult = 1;
+          roll_mult = 1;
         break;
-      case 1:
-        pitch_mult = 1;
-        roll_mult = 1;
-      break;
-      case 2:
-        pitch_mult = -1;
-        roll_mult = 1;
-      break;
-      case 3:
-        pitch_mult = -1;
-        roll_mult = -1;
-      break;
+        case 2:
+          pitch_mult = -1;
+          roll_mult = 1;
+        break;
+        case 3:
+          pitch_mult = -1;
+          roll_mult = -1;
+        break;
+      }
     }
     
     double p = pitch * pitch_mult;
@@ -130,28 +149,26 @@ void ESCController::loop() {
     double t1 = thr_p * THROTTLE_INFLUENCE;
     double t2 = thr_p * (p + r) * PID_INFLUENCE;
     double t = t1 + t2;
-    t = thr_p;// manual override
-//    if(t < 0) t = 0;
 
     if(false) {
-      Serial.print(t1);
-      Serial.print(" ");
-      Serial.println(t2);
-      Serial.print(" ");
+      Serial.print(i);
+      Serial.print("\t");
+      Serial.print(p);
+      Serial.print("\t");
+      Serial.print(r);
+      Serial.print("\t");
       Serial.println(t);
     }
 
-    if(false) {
-      Serial.print(pitch);
-      Serial.print(" ");
-      Serial.print(pitch_mult);
-      Serial.print(" ");
+    if(false && i == 0) { // for a specific arm
+      t = thr_p;// DEBUG - send out throttle value only (no pid compensation / no stabilization) -jkr
+      
       Serial.print(thr_p);
-      Serial.print(" ");
+      Serial.print("\t");
       Serial.print(p);
-      Serial.print(" ");
+      Serial.print("\t");
       Serial.print(r);
-      Serial.print(" ");
+      Serial.print("\t");
       Serial.println(t);
     }
 
@@ -160,10 +177,14 @@ void ESCController::loop() {
       o->setPWM(rin_val);
 #endif
 
-    if(this->_rc->isOn() == true || this->_ros->isOn())
+    if(this->_rc->isOn() == true || this->_ros->isOn() == true)
       o->setPWMPerc(t);
+    else if(armed == false) {
+      o->setPWM(Channel::PWM_OFF);
+    }
 
     o->loop();
+
   }
 }
 

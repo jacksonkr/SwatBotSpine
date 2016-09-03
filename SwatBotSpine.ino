@@ -1,13 +1,16 @@
-#define ERROR_STR "!! ERROR "
-#define SERIAL_IN false // Debug - use serial STRICTLY for setting throttle
+#define ERROR_STR   "!! ERROR "
+#define SERIAL_IN   false // Debug - use serial STRICTLY for setting throttle
 
-#define NUM_RC_CHANNELS 6
-#define NUM_ESC_MOTORS 4
+#define EEPROM_ADDRESS_IMU_GROUNDED   0
+#define EEPROM_ADDRESS_IMU_FRONT      1
+#define NUM_RC_CHANNELS   6
+#define NUM_ESC_MOTORS    4
 
 const int PITCH_MAX = 25;
 const int ROLL_MAX = 25;
 const int YAW_MAX = 5;
 
+const int FRONT = 90; // degrees front is off
 const String TYPE_X = "type_x"; // other types not implemented yet TYPE_H, TYPE_P(+)
 const String UAV_TYPE = TYPE_X;
 
@@ -19,12 +22,19 @@ uint16_t RC_Channel_Value[NUM_RC_CHANNELS];
 
 bool armed = false;
 
+// this isn't working when it's in helpers.cpp ??
+void arrayShift(double* arr, double val, int len) {
+  memmove(&arr[1], &arr[0], (len-1)*sizeof(double));
+  arr[0] = val;
+}
+
+#include "helpers.cpp"
 #include <SoftwareServo.h>
 #include <PID_v1.h>
 #include <Filters.h>
 #include "PinChangeInt.h"
 #include <RCLib.h> // needs to be after code above
-#include "KalmanFilter.h"
+#include <KalmanFilter.h>
 #include "Channel.h"
 #include "ESC.h"
 
@@ -47,15 +57,6 @@ void setup() {
   SetRCInterrupts(); // for reading rc inputs / pinchangeinterrupt
 
   rc = new RemoteControl();
-  rc->addChannel(new Channel(Channel::ELEVATOR, RC_Channel_Pin[0], 1150, 1850));
-  rc->addChannel(new Channel(Channel::AILERON,  RC_Channel_Pin[1], 1150, 1850));
-  rc->addChannel(new Channel(Channel::THROTTLE, RC_Channel_Pin[2], 1150, 1820));
-  rc->addChannel(new Channel(Channel::RUDDER,   RC_Channel_Pin[3], 1150, 1850));
-  if(RC_Channel_Pin[5])
-    rc->addChannel(new Channel(Channel::AUX1, RC_Channel_Pin[4], 990, 2000));
-  if(RC_Channel_Pin[6])
-    rc->addChannel(new Channel(Channel::AUX2, RC_Channel_Pin[5], 990, 2000));
-
   ros = new ROSController();
   imu = new IMUController();
   sc = new StabilityController(rc, ros, imu);
@@ -72,4 +73,18 @@ void loop() {
   imu->loop(); // get current position
   sc->loop(); // desired RX/ROS input vs IMU input, calc new position
   ec->loop(); // send new position to esc
+
+  if(armed == false 
+  && ec->getInitialized() == true 
+  && imu->getInitialized() == true
+  && (rc->isOn() == true || ros->isOn() == true)) {
+    // watch for arming sequence
+    armed = true;
+    Serial.println("ARMED!");
+  } else if(armed == true
+  && rc->isOn() == false 
+  && ros->isOn() == false) {
+    armed = false;
+    Serial.println("DISARMED!");
+  }
 }

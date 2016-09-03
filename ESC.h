@@ -6,17 +6,20 @@ class ESC {
     bool _initialized = false;
     const int TIME_INIT_MILLIS = 1000;
     SoftwareServo _servo;
-    int getPWM() {
-      return this->_pwm;
-    }
   public:
     ESC(int);
     void loop();
     int getId() {
       return this->_id;
     }
+    bool getInitialized() {
+      return this->_initialized;
+    }
     void setPWMPerc(double p);
     void setPWM(int);
+    int getPWM() {
+      return this->_pwm;
+    }
 };
 
 ESC::ESC(int id) {
@@ -33,7 +36,9 @@ ESC::ESC(int id) {
 }
 
 void ESC::setPWM(int pwm) {
-  if(this->_pwm != pwm && this->_initialized == true) {
+  if(armed == true && this->_pwm != pwm) {
+    if(pwm < Channel::PWM_LOW) pwm = Channel::PWM_LOW;
+    
     this->_pwm = pwm;
     this->_servo.write(pwm);
 
@@ -44,13 +49,20 @@ void ESC::setPWM(int pwm) {
       Serial.print(" ");
       Serial.println(pwm);
     }
+  } else if(armed == false) {
+    this->_servo.write(Channel::PWM_OFF);
   }
 }
 
 void ESC::setPWMPerc(double p) {
     int v = p * Channel::PWM_MAX;
-//    if(v < Channel::PWM_LOW) v = Channel::PWM_LOW;
     this->setPWM(v);
+
+    if(false) {
+      Serial.print(p);
+      Serial.print(" ");
+      Serial.println(v);
+    }
 }
 
 void ESC::loop() {
@@ -59,11 +71,11 @@ void ESC::loop() {
   if(millis() > TIME_INIT_MILLIS && this->_initialized == false) {
     this->_initialized = true;
     
-//    this->_servo.write(Channel::PWM_MAX);
-    this->setPWM(Channel::PWM_MAX);
+    this->_servo.write(Channel::PWM_MAX);
+//    this->setPWM(Channel::PWM_MAX); // not armed yet, have to bypass init -jkr
     delay(5);
-//    this->_servo.write(Channel::PWM_OFF);
-    this->setPWM(Channel::PWM_NOSPIN);
+    this->_servo.write(Channel::PWM_NOSPIN); // needs to be nospin (very low) not off (0), off makes the esc ANGRY >: -jkr
+//    this->setPWM(Channel::PWM_NOSPIN);; // not armed yet, have to bypass init -jkr
     delay(5);
 
     Serial.print("ESC ");

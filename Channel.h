@@ -13,22 +13,10 @@ class Channel {
     int _low;
   public:
     void loop();
-    void setValue(int v) {
-      this->_value = v;
-    }
-    int getValue() {
-      return this->_value;
-    }
-    double getPerc() {
-      double p = map(this->_value, this->_low, this->_high, 0, 1000);
-      p /= 1000;
-      if(p > 1) p = 1;
-      if(p < 0) p = 0;
-      return p;
-    }
-    String getType() {
-      return _type;
-    }
+    void setValue(int);
+    int getValue();
+    double getPerc();
+    String getType();
     
     static const String ELEVATOR;
     static const String AILERON;
@@ -54,6 +42,8 @@ const String Channel::AUX1     = "aux1";
 const String Channel::AUX2     = "aux2";
 
 const int Channel::PWM_MAX = 180;
+const int Channel::PWM_HIGH = 160;
+const int Channel::PWM_LOW = 40;
 const int Channel::PWM_NOSPIN = 20;
 const int Channel::PWM_OFF = 0;
 
@@ -63,19 +53,37 @@ Channel::Channel(String type, int inPin, int low, int high) {
   this->_high = high;
   this->_low = low;
 
-  this->setValue(0);
+//  this->setValue(0);
 
 //  if(this->_inPin != NULL) pinMode(this->_inPin, INPUT); // input is controlled included library
 }
+void Channel::setValue(int v) {
+//  if(armed == true && v < Channel::PWM_NOSPIN) v = Channel::PWM_NOSPIN;
+  this->_value = v;
+}
+int Channel::getValue() {
+  return this->_value;
+}
+double Channel::getPerc() {
+  Serial.print(this->_type);
+  Serial.print(" ");
+  Serial.println(this->getValue());
+  double p = map(this->getValue(), this->_low, this->_high, 0, 1000);
+  p /= 1000;
+  if(p > 1) p = 1;
+  if(p < 0) p = 0;
+  return p;
+}
+String Channel::getType() {
+  return this->_type;
+}
 
 void Channel::loop() {
-// INPUT
 //  Serial.println("Channel Loop");
-  
   if(this->_inPin != NULL) {
     for(int i = 0; i < NUM_RC_CHANNELS; ++i) {
       if(RC_Channel_Pin[i] == this->_inPin) {
-        if(false && this->getType() == "throttle") {
+        if(false && this->getType() == "throttle") { // debug
           Serial.print("channel input: ");
           Serial.print(this->_type);
           Serial.print(": ");
@@ -87,24 +95,3 @@ void Channel::loop() {
     }
   }
 }
-
-//void Channel::setPWM(int pwm) {
-//  this->_pwm = pwm;
-//}
-
-//void Channel::setPerc(float perc) {
-//  int pwm = this->_high - this->_low;
-//  pwm *= perc;
-//  pwm += this->_low;
-//  this->setPWM(pwm);
-//}
-
-//void Channel::assumeDefaultPWM() {
-//  if(this->_low > 0 && this->_high > 0) {
-//    // applies to all channel types
-//    this->_pwm = (this->_high - this->_low) / 2 + this->_low; // should be the median between low and high
-//    
-//    if(this->_type == Channel::THROTTLE) // override for throttle
-//      this->_pwm = this->_low;
-//  }
-//}

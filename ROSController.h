@@ -5,6 +5,7 @@ class ROSController {
   public:
     void loop();
     ROSController();
+    double* getAttitude();
     bool isOn() {
       return this->_is_on;
     }
@@ -19,6 +20,10 @@ const int ROSController::THR_MAX = 100;
 
 ROSController::ROSController() {
   
+}
+
+double* ROSController::getAttitude() {
+  return new double[3]{0, 0, 0};
 }
 
 void ROSController::loop() {
