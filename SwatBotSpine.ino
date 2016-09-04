@@ -52,7 +52,7 @@ ESCController* ec;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("booting up...");
+  Serial.println(F("booting up..."));
 
   SetRCInterrupts(); // for reading rc inputs / pinchangeinterrupt
 
@@ -62,7 +62,7 @@ void setup() {
   sc = new StabilityController(rc, ros, imu);
   ec = new ESCController(rc, ros, sc);
 
-  Serial.println("SWATBOT SETUP COMPLETE");
+  Serial.println(F("SWATBOT SETUP COMPLETE"));
 }
 
 void loop() {
@@ -80,11 +80,11 @@ void loop() {
   && (rc->isOn() == true || ros->isOn() == true)) {
     // watch for arming sequence
     armed = true;
-    Serial.println("ARMED!");
+    Serial.println(F("ARMED!"));
   } else if(armed == true
   && rc->isOn() == false 
   && ros->isOn() == false) {
     armed = false;
-    Serial.println("DISARMED!");
+    Serial.println(F("DISARMED!"));
   }
 }

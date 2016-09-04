@@ -30,7 +30,7 @@ ESC::ESC(int id) {
   this->_servo.attach(this->_pin);
 
   if(false) { // debug
-    Serial.print("ESC construct pin ");
+    Serial.print(F("ESC construct pin "));
     Serial.println(this->_pin);
   }
 }
@@ -78,9 +78,9 @@ void ESC::loop() {
 //    this->setPWM(Channel::PWM_NOSPIN);; // not armed yet, have to bypass init -jkr
     delay(5);
 
-    Serial.print("ESC ");
+    Serial.print(F("ESC "));
     Serial.print(this->_id);
-    Serial.println(" initialized");
+    Serial.println(F(" initialized"));
   }
 
   this->_servo.refresh();

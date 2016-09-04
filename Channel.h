@@ -65,9 +65,6 @@ int Channel::getValue() {
   return this->_value;
 }
 double Channel::getPerc() {
-  Serial.print(this->_type);
-  Serial.print(" ");
-  Serial.println(this->getValue());
   double p = map(this->getValue(), this->_low, this->_high, 0, 1000);
   p /= 1000;
   if(p > 1) p = 1;
@@ -84,9 +81,9 @@ void Channel::loop() {
     for(int i = 0; i < NUM_RC_CHANNELS; ++i) {
       if(RC_Channel_Pin[i] == this->_inPin) {
         if(false && this->getType() == "throttle") { // debug
-          Serial.print("channel input: ");
+          Serial.print(F("channel input: "));
           Serial.print(this->_type);
-          Serial.print(": ");
+          Serial.print(F(": "));
           Serial.print(RC_Channel_Value[i]);
           Serial.println();
         }
