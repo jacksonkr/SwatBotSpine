@@ -3,8 +3,9 @@ class ESCController {
     /**
      * percentage of how much the throttle influences motor speed
      */
-    const double THROTTLE_INFLUENCE = 0.8;
-    const double PID_INFLUENCE = 0.2;
+    const double INFLUENCE_EMERGENCY   = 0.1; // 10%
+    const double INFLUENCE_PID         = 0.2; // 20%
+    const double INFLUENCE_THROTTLE    = 0.7; // 70%
 
     RemoteControl* _rc;
     ROSController* _ros;
@@ -19,7 +20,6 @@ class ESCController {
     }
   public:
     ESCController(RemoteControl* rc, ROSController* ros, StabilityController* sc);
-    void setMode(String mode);
     void loop();
     bool getInitialized() {
        /**
@@ -70,16 +70,19 @@ void ESCController::loop() {
    * get new values from sc
    */
 
-  double pitch, roll;
+  double pitch, roll, yaw;
   double* attitude = this->_sc->getPIDOutput();
   pitch = attitude[0];
   roll = attitude[1];
+  yaw = 0; // attitude[2];
   delete [] attitude;
 
   if(false) {
     Serial.print(pitch);
     Serial.print(" ");
-    Serial.println(roll);
+    Serial.print(roll);
+    Serial.print(" ");
+    Serial.println(yaw);
   }
 
   /**
@@ -94,18 +97,19 @@ void ESCController::loop() {
   if(this->_ros->isOn() == true)
     thr_p = this->_ros->getThrottlePerc();
 
-  if(armed == false) thr_p = Channel::PWM_OFF;
+  if(armed == false) thr_p = ESC::PWM_OFF;
 
 #ifdef SERIAL_IN
   char rin = Serial.read();
   double rin_val = -1;
-  String inStr = String(rin);
+  char inStr = rin;
   if(rin > -1) {
     Serial.print("serial in: ");
     Serial.print(inStr);
-    
-    if (inStr.toInt() >= 0 && inStr.toInt() <= 9) {
-      rin_val = inStr.toInt() * 20;
+
+    Serial.println(F("!! changed inStr from String to char, this may break things -jkr"));
+    if ((int)inStr >= 0 && (int)inStr <= 9) {
+      rin_val = (int)inStr * 20;
       if(rin_val > 0) {
         Serial.print(" ");
         Serial.println(rin_val);
@@ -119,50 +123,60 @@ void ESCController::loop() {
 
     int arm_angle = this->getMotorArmAngleById(i);
     double rad = arm_angle / 360 * PI;
-    double pitch_mult, roll_mult;
+    double pitch_mult, roll_mult, yaw_mult;
 
     //todo: make this dynamic to fit any style uas
+    // amount of effect each motor has based on pitch vs roll
+    int with_rc_values = 1;
+    int against_rc_values = -1;
     if(NUM_ESC_MOTORS == 4) {
       // STATIC FOR X QUAD
       switch(i){
         case 0:
-          pitch_mult = 1;
-          roll_mult = -1;
+          pitch_mult  = with_rc_values;
+          roll_mult   = with_rc_values;
+          yaw_mult    = with_rc_values;
           break;
         case 1:
-          pitch_mult = 1;
-          roll_mult = 1;
+          pitch_mult  = with_rc_values;
+          roll_mult   = against_rc_values;
+          yaw_mult    = against_rc_values;
         break;
         case 2:
-          pitch_mult = -1;
-          roll_mult = 1;
+          pitch_mult  = against_rc_values;
+          roll_mult   = against_rc_values;
+          yaw_mult    = with_rc_values;
         break;
         case 3:
-          pitch_mult = -1;
-          roll_mult = -1;
+          pitch_mult  = against_rc_values;
+          roll_mult   = with_rc_values;
+          yaw_mult    = against_rc_values;
         break;
       }
     }
     
-    double p = pitch * pitch_mult;
-    double r = roll * roll_mult;
-    double t1 = thr_p * THROTTLE_INFLUENCE;
-    double t2 = thr_p * (p + r) * PID_INFLUENCE;
-    double t = t1 + t2;
+    double p =    pitch * pitch_mult;
+    double r =    roll * roll_mult;
+    double y =    yaw * yaw_mult;
+    double t1 =   thr_p * INFLUENCE_THROTTLE;
+    double t2 =   thr_p * INFLUENCE_PID * ((p + r + y) / 3);
+    double t =    t1 + t2;
 
-    if(false) {
+    if(false && this->_rc->isOn()) {
       Serial.print(i);
-      Serial.print("\t");
+      Serial.print(" ");
+      Serial.print(thr_p);
+      Serial.print(" ");
       Serial.print(p);
       Serial.print("\t");
       Serial.print(r);
+      Serial.print("\t");
+      Serial.print(y);
       Serial.print("\t");
       Serial.println(t);
     }
 
     if(false && i == 0) { // for a specific arm
-      t = thr_p;// DEBUG - send out throttle value only (no pid compensation / no stabilization) -jkr
-      
       Serial.print(thr_p);
       Serial.print("\t");
       Serial.print(p);
@@ -170,6 +184,8 @@ void ESCController::loop() {
       Serial.print(r);
       Serial.print("\t");
       Serial.println(t);
+      
+      t = thr_p;// DEBUG - send out throttle value only (no pid compensation / no stabilization) -jkr
     }
 
 #ifdef SERIAL_IN
@@ -180,7 +196,7 @@ void ESCController::loop() {
     if(this->_rc->isOn() == true || this->_ros->isOn() == true)
       o->setPWMPerc(t);
     else if(armed == false) {
-      o->setPWM(Channel::PWM_OFF);
+      o->setPWM(ESC::PWM_OFF);
     }
 
     o->loop();

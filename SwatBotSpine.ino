@@ -6,13 +6,13 @@
 #define NUM_RC_CHANNELS   6
 #define NUM_ESC_MOTORS    4
 
-const int PITCH_MAX = 25;
-const int ROLL_MAX = 25;
+const int PITCH_MAX = 10;
+const int ROLL_MAX = 10;
 const int YAW_MAX = 5;
 
 const int FRONT = 90; // degrees front is off
-const String TYPE_X = "type_x"; // other types not implemented yet TYPE_H, TYPE_P(+)
-const String UAV_TYPE = TYPE_X;
+const char* TYPE_X = "type_x"; // other types not implemented yet TYPE_H, TYPE_P(+)
+const char* UAV_TYPE = TYPE_X;
 
 const int PIN_ESC_MOTOR[NUM_ESC_MOTORS] = {6,9,10,11}; 
 

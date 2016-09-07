@@ -7,7 +7,7 @@ class RemoteControl {
     void loopChannels();
   public:
     RemoteControl();
-    Channel* getChannel(String type);
+    Channel* getChannel(const char* type);
     void filterRemoteOnError();
     void move(int vector, int speed);
     int addChannel(Channel* ch);
@@ -84,7 +84,7 @@ int RemoteControl::addChannel(Channel* ch) {
   return this->_channels_length;
 }
 
-Channel* RemoteControl::getChannel(String type) {
+Channel* RemoteControl::getChannel(const char* type) {
   for(int i = 0; i < this->_channels_length; ++i) {
     Channel* o = this->_channels[i];
 

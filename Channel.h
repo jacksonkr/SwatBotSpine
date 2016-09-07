@@ -7,7 +7,7 @@ class Channel {
     int _chType;
     int _value;
   protected:
-    String _type;
+    const char* _type;
     int _inPin;
     int _high;
     int _low;
@@ -16,38 +16,26 @@ class Channel {
     void setValue(int);
     int getValue();
     double getPerc();
-    String getType();
+    const char* getType();
     
-    static const String ELEVATOR;
-    static const String AILERON;
-    static const String THROTTLE;
-    static const String RUDDER;
-    static const String AUX1;
-    static const String AUX2;
+    static const char* ELEVATOR;
+    static const char* AILERON;
+    static const char* THROTTLE;
+    static const char* RUDDER;
+    static const char* AUX1;
+    static const char* AUX2;
 
-    static const int PWM_MAX;
-    static const int PWM_HIGH;
-    static const int PWM_LOW;
-    static const int PWM_NOSPIN;
-    static const int PWM_OFF;
-
-    Channel(String type, int inPin, int low, int high);
+    Channel(const char* type, int inPin, int low, int high);
 };
 
-const String Channel::ELEVATOR = "elevator";
-const String Channel::AILERON  = "aileron";
-const String Channel::THROTTLE = "throttle";
-const String Channel::RUDDER   = "rudder";
-const String Channel::AUX1     = "aux1";
-const String Channel::AUX2     = "aux2";
+const char* Channel::ELEVATOR = "elevator";
+const char* Channel::AILERON  = "aileron";
+const char* Channel::THROTTLE = "throttle";
+const char* Channel::RUDDER   = "rudder";
+const char* Channel::AUX1     = "aux1";
+const char* Channel::AUX2     = "aux2";
 
-const int Channel::PWM_MAX = 180;
-const int Channel::PWM_HIGH = 160;
-const int Channel::PWM_LOW = 40;
-const int Channel::PWM_NOSPIN = 20;
-const int Channel::PWM_OFF = 0;
-
-Channel::Channel(String type, int inPin, int low, int high) {
+Channel::Channel(const char* type, int inPin, int low, int high) {
   this->_type = type;
   this->_inPin = inPin;
   this->_high = high;
@@ -71,7 +59,7 @@ double Channel::getPerc() {
   if(p < 0) p = 0;
   return p;
 }
-String Channel::getType() {
+const char* Channel::getType() {
   return this->_type;
 }
 

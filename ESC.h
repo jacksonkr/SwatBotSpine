@@ -15,12 +15,26 @@ class ESC {
     bool getInitialized() {
       return this->_initialized;
     }
-    void setPWMPerc(double p);
-    void setPWM(int);
+    void setPWMPerc(double);
+    void setPWM(int, bool);
     int getPWM() {
       return this->_pwm;
     }
+
+    static const int INIT_MOTOR_INTERMISSION;
+    static const int PWM_MAX;
+    static const int PWM_HIGH;
+    static const int PWM_LOW;
+    static const int PWM_NOSPIN;
+    static const int PWM_OFF;
 };
+
+const int ESC::INIT_MOTOR_INTERMISSION = 20; // time before and after high low during intermission -jkr
+const int ESC::PWM_MAX = 180;
+const int ESC::PWM_HIGH = 160;
+const int ESC::PWM_LOW = 50;
+const int ESC::PWM_NOSPIN = 20; // has to be somewhere between esc config off (stop) and low (slow spin) -jkr
+const int ESC::PWM_OFF = 0;
 
 ESC::ESC(int id) {
   this->_id = id;
@@ -35,27 +49,42 @@ ESC::ESC(int id) {
   }
 }
 
-void ESC::setPWM(int pwm) {
-  if(armed == true && this->_pwm != pwm) {
-    if(pwm < Channel::PWM_LOW) pwm = Channel::PWM_LOW;
-    
-    this->_pwm = pwm;
-    this->_servo.write(pwm);
+/**
+ * `bypass` was introduced so that the esc's could arm before armed is set to true -jkr
+ */
+void ESC::setPWM(int pwm, bool bypass = false) {
+  if(armed == false && this->_initialized == true && this->getPWM() != 0) {
+    Serial.print(F("OFF"));
+    Serial.print(F(" "));
+    Serial.println(armed);
+    this->_pwm = ESC::PWM_OFF;
+    this->_servo.write(ESC::PWM_OFF); // running into a non-init conflict here -jkr
 
-    if(false) { // debug
-      Serial.print(this->_id);
-      Serial.print(" ");
-      Serial.print(this->_pin);
-      Serial.print(" ");
-      Serial.println(pwm);
-    }
-  } else if(armed == false) {
-    this->_servo.write(Channel::PWM_OFF);
+    return;
   }
+  
+  if(this->_pwm != pwm) { // only send a pwm change if the pwm has actually changed -jkr
+    if(armed == true || bypass == true) {
+      // leave restriction up to the 
+//      if(armed == true && pwm < ESC::PWM_LOW) pwm = ESC::PWM_LOW; // only restirct PWM when armed -jkr
+      
+      this->_pwm = pwm;
+      this->_servo.write(pwm);
+  
+      if(true) { // debug
+        Serial.print(this->_id);
+        Serial.print(" ");
+        Serial.print(this->_pin);
+        Serial.print("\t");
+        Serial.println(pwm);
+      }
+    }
+  }
+  
 }
 
 void ESC::setPWMPerc(double p) {
-    int v = p * Channel::PWM_MAX;
+    int v = p * ESC::PWM_MAX;
     this->setPWM(v);
 
     if(false) {
@@ -66,17 +95,14 @@ void ESC::setPWMPerc(double p) {
 }
 
 void ESC::loop() {
-
   // attempt init
   if(millis() > TIME_INIT_MILLIS && this->_initialized == false) {
-    this->_initialized = true;
+    this->setPWM(ESC::PWM_MAX, true);
+    delay(ESC::INIT_MOTOR_INTERMISSION);
+    this->setPWM(ESC::PWM_NOSPIN, true);
+    delay(ESC::INIT_MOTOR_INTERMISSION);
     
-    this->_servo.write(Channel::PWM_MAX);
-//    this->setPWM(Channel::PWM_MAX); // not armed yet, have to bypass init -jkr
-    delay(5);
-    this->_servo.write(Channel::PWM_NOSPIN); // needs to be nospin (very low) not off (0), off makes the esc ANGRY >: -jkr
-//    this->setPWM(Channel::PWM_NOSPIN);; // not armed yet, have to bypass init -jkr
-    delay(5);
+    this->_initialized = true;
 
     Serial.print(F("ESC "));
     Serial.print(this->_id);
