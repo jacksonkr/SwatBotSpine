@@ -45,7 +45,7 @@ void arrayShift(double* arr, double val, int len) {
 #include "ESCController.h"
 
 RemoteControl* rc;
-ROSController* ros;
+ROSController* rosc;
 IMUController* imu;
 StabilityController *sc;
 ESCController* ec;
@@ -57,10 +57,10 @@ void setup() {
   SetRCInterrupts(); // for reading rc inputs / pinchangeinterrupt
 
   rc = new RemoteControl();
-  ros = new ROSController();
+  rosc = new ROSController();
   imu = new IMUController();
-  sc = new StabilityController(rc, ros, imu);
-  ec = new ESCController(rc, ros, sc);
+  sc = new StabilityController(rc, rosc, imu);
+  ec = new ESCController(rc, rosc, sc);
 
   Serial.println(F("SWATBOT SETUP COMPLETE"));
 }
@@ -69,7 +69,7 @@ void loop() {
 //  Serial.println("loop");
 
   rc->loop(); // read controls - RC overrides ROS
-  ros->loop(); // read instructions from ros
+  rosc->loop(); // read instructions from ros
   imu->loop(); // get current position
   sc->loop(); // desired RX/ROS input vs IMU input, calc new position
   ec->loop(); // send new position to esc
@@ -77,13 +77,13 @@ void loop() {
   if(armed == false 
   && ec->getInitialized() == true 
   && imu->getInitialized() == true
-  && (rc->isOn() == true || ros->isOn() == true)) {
+  && (rc->isOn() == true || rosc->isOn() == true)) {
     // watch for arming sequence
     armed = true;
     Serial.println(F("ARMED!"));
   } else if(armed == true
   && rc->isOn() == false 
-  && ros->isOn() == false) {
+  && rosc->isOn() == false) {
     armed = false;
     Serial.println(F("DISARMED!"));
   }

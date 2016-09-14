@@ -3,9 +3,9 @@ class ESCController {
     /**
      * percentage of how much the throttle influences motor speed
      */
-    const double INFLUENCE_EMERGENCY   = 0.1; // 10%
-    const double INFLUENCE_PID         = 0.2; // 20%
-    const double INFLUENCE_THROTTLE    = 0.7; // 70%
+    const double INFLUENCE_BUFFER      = 0.0; // not implemented yet
+    const double INFLUENCE_PID         = 0.8;
+    const double INFLUENCE_THROTTLE    = 0.2;
 
     RemoteControl* _rc;
     ROSController* _ros;
@@ -154,13 +154,21 @@ void ESCController::loop() {
         break;
       }
     }
+
+    /**
+     * This is the heart of the algo
+     * shouldn't this be in the stabilty controller? yes -jkr1
+     */
     
     double p =    pitch * pitch_mult;
     double r =    roll * roll_mult;
     double y =    yaw * yaw_mult;
     double t1 =   thr_p * INFLUENCE_THROTTLE;
-    double t2 =   thr_p * INFLUENCE_PID * ((p + r + y) / 3);
+    // ?? T + (P * error) - http://www.flitetest.com/articles/p-i-and-sometimes-d-gains-in-a-nutshell
+    double t2 =   (thr_p * INFLUENCE_PID/2 + INFLUENCE_PID/2) * ((p + r + y) / 3);
     double t =    t1 + t2;
+
+    
 
     if(false && this->_rc->isOn()) {
       Serial.print(i);
@@ -178,11 +186,11 @@ void ESCController::loop() {
 
     if(false && i == 0) { // for a specific arm
       Serial.print(thr_p);
-      Serial.print("\t");
+      Serial.print(F("\t"));
       Serial.print(p);
-      Serial.print("\t");
+      Serial.print(F("\t"));
       Serial.print(r);
-      Serial.print("\t");
+      Serial.print(F("\t"));
       Serial.println(t);
       
       t = thr_p;// DEBUG - send out throttle value only (no pid compensation / no stabilization) -jkr
@@ -200,7 +208,6 @@ void ESCController::loop() {
     }
 
     o->loop();
-
   }
 }
 

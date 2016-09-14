@@ -28,9 +28,9 @@ class StabilityController {
     static const int PID_KD;
 };
 
-    const int StabilityController::PID_KP = 10; 
-    const int StabilityController::PID_KI = 3; 
-    const int StabilityController::PID_KD = 1;
+    const int StabilityController::PID_KP = 50; 
+    const int StabilityController::PID_KI = 25; 
+    const int StabilityController::PID_KD = 0;
 
 StabilityController::StabilityController(RemoteControl* rc, ROSController* ros, IMUController *imu) {
   this->_rc = rc;
@@ -82,12 +82,13 @@ double* StabilityController::getPIDOutput() {
   double pneg = this->_pid_pitchn_output / PID_OUTPUT_MAX;
   double rneg = this->_pid_rolln_output / PID_OUTPUT_MAX;
 
-  double p = ppos - pneg;
-  double r = rpos - rneg;
+  double p = ppos;// - pneg;
+  double r = rpos;// - rneg;
 
   if(false) {
     Serial.print(ppos);
     Serial.print(F(" "));
+//    Serial.println(rpos);
     Serial.println(pneg);
   }
   
