@@ -1,12 +1,5 @@
 class ESCController {
   protected:
-    /**
-     * percentage of how much the throttle influences motor speed
-     */
-    const double INFLUENCE_BUFFER      = 0.0; // not implemented yet
-    const double INFLUENCE_PID         = 0.8;
-    const double INFLUENCE_THROTTLE    = 0.2;
-
     RemoteControl* _rc;
     ROSController* _ros;
     StabilityController* _sc;
@@ -71,10 +64,10 @@ void ESCController::loop() {
    */
 
   double pitch, roll, yaw;
-  double* attitude = this->_sc->getPIDOutput();
+  double* attitude = this->_sc->getPRYOutput();
   pitch = attitude[0];
   roll = attitude[1];
-  yaw = 0; // attitude[2];
+  yaw = attitude[2];
   delete [] attitude;
 
   if(false) {
@@ -163,18 +156,19 @@ void ESCController::loop() {
     double p =    pitch * pitch_mult;
     double r =    roll * roll_mult;
     double y =    yaw * yaw_mult;
-    double t1 =   thr_p * INFLUENCE_THROTTLE;
-    // ?? T + (P * error) - http://www.flitetest.com/articles/p-i-and-sometimes-d-gains-in-a-nutshell
-    double t2 =   (thr_p * INFLUENCE_PID/2 + INFLUENCE_PID/2) * ((p + r + y) / 3);
-    double t =    t1 + t2;
+//    double t1 =   thr_p * INFLUENCE_THROTTLE;
+//    double t2 =   ((p + r + y) / 3) * INFLUENCE_STABILIZATION
+//    double t =    t1 + t2;
+    double t = thr_p + ((p + r + y) / 3); // totals 2.0 but this allows PID to take max throttle TODO: introduce max throttle buffer
+    if(t > 1) t = 1;
 
-    
+    // todo: calculate for max pwm buffer here
 
-    if(false && this->_rc->isOn()) {
+    if(false) {// && this->_rc->isOn()) {
       Serial.print(i);
-      Serial.print(" ");
+      Serial.print(":\t");
       Serial.print(thr_p);
-      Serial.print(" ");
+      Serial.print("\t");
       Serial.print(p);
       Serial.print("\t");
       Serial.print(r);
