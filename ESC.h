@@ -70,6 +70,7 @@ void ESC::setPWM(int pwm, bool bypass = false) {
   }
 
   if(pwm < ESC::PWM_LOW && this->beyondInitPad() == true) pwm = ESC::PWM_LOW; // keep the motors from slowing to a stop in flight
+  if(pwm > ESC::PWM_HIGH) pwm = ESC::PWM_HIGH;
   
   if(this->_pwm != pwm) { // only send a pwm change if the pwm has actually changed -jkr
     if(armed == true || bypass == true) {
@@ -89,7 +90,7 @@ void ESC::setPWM(int pwm, bool bypass = false) {
 
 void ESC::setPWMPerc(double p) {
     int v = 0; // = p * ESC::PWM_MAX;
-    v = map(p * 100, 0, 100, ESC::PWM_LOW, ESC::PWM_HIGH);
+    v = map(p * 100, 0, 100, ESC::PWM_LOW, ESC::PWM_HIGH); // use high, not max. max will shut off motors -jkr
     this->setPWM(v);
 
     if(false) {// && this->_id == 0) {

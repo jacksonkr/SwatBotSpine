@@ -34,7 +34,6 @@ void arrayShift(double* arr, double val, int len) {
 #include <Filters.h>
 #include "PinChangeInt.h"
 #include <RCLib.h> // needs to be after code above
-#include <KalmanFilter.h>
 #include "Channel.h"
 #include "ESC.h"
 
