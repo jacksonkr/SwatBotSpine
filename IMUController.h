@@ -5,6 +5,7 @@
 #include <Adafruit_BMP085_U.h>
 #include <Adafruit_L3GD20_U.h>
 #include <Adafruit_10DOF.h>
+#include <KalmanFilter.h>
 
 class IMUController {
   protected:
@@ -15,6 +16,11 @@ class IMUController {
     int _set_ground_loop_count = 0;
     int _set_ground = 0;
     double _groundPR[2] = {0, 0};
+    /**
+     * substracted from gyro outputs to zero them out
+     * todo: make this dynamic and potentially apply kalman -jkr
+     */
+    double _groundGyro[3] = {-0.048, 0.03, 0.074}; // relative to the chip
     sensor_t sensor;
     Adafruit_10DOF                dof   = Adafruit_10DOF();
     Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
@@ -23,6 +29,7 @@ class IMUController {
     Adafruit_L3GD20_Unified       gyro  = Adafruit_L3GD20_Unified(20);
     float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
     double _attitude[3];
+    double _gyro[3];
     void getGroundedPR(double*);
     void setGroundedPR(double, double);
     void setFront(int);
@@ -32,10 +39,13 @@ class IMUController {
       if(FRONT == 90) {
         if(this->_groundPR[0] != 0.00) r -= this->_groundPR[0];
         if(this->_groundPR[1] != 0.00) p -= this->_groundPR[1];
+      } else {
+        if(this->_groundPR[0] != 0.00) p -= this->_groundPR[0];
+        if(this->_groundPR[1] != 0.00) r -= this->_groundPR[1];
       }
 
       if(false) {
-        Serial.print("IMU->setAttitude\t");
+        Serial.print(F("IMU->setAttitude "));
         Serial.print(p);
         Serial.print("\t");
         Serial.print(r);
@@ -47,14 +57,45 @@ class IMUController {
       this->_attitude[1] = r;
       this->_attitude[2] = y;
     }
+    void setGyro(double x, double y, double z) {
+      if(false) {
+        Serial.print(F("IMU->setGyro "));
+        Serial.print(x);
+        Serial.print(F(" "));
+        Serial.print(y);
+        Serial.print(F(" "));
+        Serial.print(z);
+      }
+      
+      this->_gyro[0] = x;
+      this->_gyro[1] = y;
+      this->_gyro[2] = z;
+    }
     bool getInitialized();
-    double* getAttitude() {
-      return this->_attitude;
+    double* getFilteredAttitude() {
+      double p, r, y;
+      
+      p = this->_attitude[0];
+      r = this->_attitude[1];
+      y = this->_attitude[2];
+      
+      return new double[3]{p, r, y};
+    }
+    double* getGroundedGyroOutput() {
+      double x, y, z;
+
+      x = this->_gyro[0] - this->_groundGyro[0];
+      y = this->_gyro[1] - this->_groundGyro[1];
+      z = this->_gyro[2] - this->_groundGyro[2];
+
+      return new double[3]{x, y, z};
     }
     void loop();
 };
 
 IMUController::IMUController() {
+
+  gyro.enableAutoRange(true);
 
   if (false) { // debug set grounded
     this->_set_ground = 1;
@@ -78,6 +119,12 @@ IMUController::IMUController() {
     /* There was a problem detecting the BMP180 ... check your connections */
     Serial.println("Ooops, no BMP180 detected ... Check your wiring!");
     while (1);
+  }
+  if(!gyro.begin())
+  {
+    /* There was a problem detecting the L3GD20 ... check your connections */
+    Serial.println("Ooops, no L3GD20 detected ... Check your wiring!");
+    while(1);
   }
 
   accel.getSensor(&sensor);
@@ -135,10 +182,12 @@ void IMUController::loop() {
   sensors_event_t accel_event;
   sensors_event_t mag_event;
   sensors_event_t bmp_event;
+  sensors_event_t gyro_event; 
   sensors_vec_t   orientation;
 
   accel.getEvent(&accel_event);
   mag.getEvent(&mag_event);
+  gyro.getEvent(&gyro_event);
 
   if (dof.fusionGetOrientation(&accel_event, &mag_event, &orientation))
   {
@@ -196,8 +245,7 @@ void IMUController::loop() {
       Serial.print(F(" "));
       Serial.print(orientation.roll);
       Serial.print(F(" "));
-      Serial.print(orientation.heading);
-      Serial.println(F(""));
+      Serial.println(orientation.heading);
     }
 
     // using raw attitudes
@@ -209,6 +257,17 @@ void IMUController::loop() {
     if(FRONT == 90) {
       this->setAttitude(this->_kalmanRoll.getX(), this->_kalmanPitch.getX(), this->_kalmanHeading.getX());
     }
+
+    if(false) {
+      Serial.print(F("gyro: "));
+      Serial.print(gyro_event.gyro.x);
+      Serial.print(F("\t"));
+      Serial.print(gyro_event.gyro.y);
+      Serial.print(F("\t"));
+      Serial.println(gyro_event.gyro.z);
+    }
+
+    this->setGyro(gyro_event.gyro.x, gyro_event.gyro.y, gyro_event.gyro.z);
   }
 
   if (false) { // barometric pressure debug
