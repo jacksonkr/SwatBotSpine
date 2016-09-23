@@ -4,10 +4,10 @@ class ESCController {
     ROSController* _ros;
     StabilityController* _sc;
     ESC* _escFamily[NUM_ESC_MOTORS];
-    double _starting_motor_angle = 90;
-    double _motor_angle_spread;
-    double getMotorArmAngleById(int id) {
-      double v = this->_starting_motor_angle - id * this->_motor_angle_spread;
+    int _starting_motor_angle = 90;
+    float _motor_angle_spread;
+    float getMotorArmAngleById(int id) {
+      float v = this->_starting_motor_angle - id * this->_motor_angle_spread;
       if(v < 0) v += 360;
       return v;
     }
@@ -47,15 +47,29 @@ ESCController::ESCController(RemoteControl* rc, ROSController* ros, StabilityCon
 
   Serial.println("Connect Power");
 
-  if(false) { // debug
-    for(int i = 0; i < NUM_ESC_MOTORS; ++i) {
-      double v = this->getMotorArmAngleById(i);
-      Serial.print("Motor ");
-      Serial.print(i);
-      Serial.print(" angle: ");
-      Serial.println(v);
-    }
-  }
+  // todo: get arm distances to make p r y calculations work for any number of arms
+//    for(int i = 0; i < NUM_ESC_MOTORS; ++i) {
+//      float dist = this->getMotorArmAngleById(i);
+//    }
+
+// todo: goes with the above somehow -jkr
+//    int arm_angle = this->getMotorArmAngleById(i);
+//    float rad = (float)arm_angle / 180 * PI;
+//    float pitch_mult = cos(rad);
+//    float roll_mult = sin(rad);
+//    float yaw_mult = 1;
+//
+//    if(false) {
+//      Serial.print(i);
+//      Serial.print(F("\t"));
+//      Serial.print(rad);
+//      Serial.print(F("\t"));
+//      Serial.print(arm_angle);
+//      Serial.print(F("\t"));
+//      Serial.print(pitch_mult);
+//      Serial.print(F("\t"));
+//      Serial.println(roll_mult);
+//    }
 }
 
 void ESCController::loop() {
@@ -63,8 +77,8 @@ void ESCController::loop() {
    * get new values from sc
    */
 
-  double pitch, roll, yaw;
-  double* attitude = this->_sc->getPRYOutput();
+  float pitch, roll, yaw;
+  float* attitude = this->_sc->getOutput();
   pitch = attitude[0];
   roll = attitude[1];
   yaw = attitude[2];
@@ -82,7 +96,7 @@ void ESCController::loop() {
    * assign to motors
    */
 
-  double thr_p = 0;
+  float thr_p = 0;
 
   if(this->_rc->isOn() == true)
     thr_p = this->_rc->getChannel(Channel::THROTTLE)->getPerc();
@@ -91,59 +105,37 @@ void ESCController::loop() {
     thr_p = this->_ros->getThrottlePerc();
 
   if(armed == false) thr_p = ESC::PWM_OFF;
-
-#ifdef SERIAL_IN
-  char rin = Serial.read();
-  double rin_val = -1;
-  char inStr = rin;
-  if(rin > -1) {
-    Serial.print("serial in: ");
-    Serial.print(inStr);
-
-    Serial.println(F("!! changed inStr from String to char, this may break things -jkr"));
-    if ((int)inStr >= 0 && (int)inStr <= 9) {
-      rin_val = (int)inStr * 20;
-      if(rin_val > 0) {
-        Serial.print(" ");
-        Serial.println(rin_val);
-      }
-    }
-  }
-#endif
   
   for(int i = 0; i < NUM_ESC_MOTORS; ++i) {
     ESC* o = this->_escFamily[i];
 
-    int arm_angle = this->getMotorArmAngleById(i);
-    double rad = arm_angle / 360 * PI;
-    double pitch_mult, roll_mult, yaw_mult;
-
-    //todo: make this dynamic to fit any style uas
+    //todo: this is static for time's sake. Dynamic portion yet to be finished (notes everywhere) -jkr
     // amount of effect each motor has based on pitch vs roll
-    int with_rc_values = 1;
-    int against_rc_values = -1;
+    float pitch_mult, roll_mult, yaw_mult;
+    int with_values = 1;
+    int against_values = -1;
     if(NUM_ESC_MOTORS == 4) {
-      // STATIC FOR X QUAD
+      // STATIC FOR X QUAD w front at -180 degress
       switch(i){
         case 0:
-          pitch_mult  = with_rc_values;
-          roll_mult   = with_rc_values;
-          yaw_mult    = with_rc_values;
+          pitch_mult  = with_values;
+          roll_mult   = with_values;
+          yaw_mult    = with_values;
           break;
         case 1:
-          pitch_mult  = with_rc_values;
-          roll_mult   = against_rc_values;
-          yaw_mult    = against_rc_values;
+          pitch_mult  = with_values;
+          roll_mult   = against_values;
+          yaw_mult    = against_values;
         break;
         case 2:
-          pitch_mult  = against_rc_values;
-          roll_mult   = against_rc_values;
-          yaw_mult    = with_rc_values;
+          pitch_mult  = against_values;
+          roll_mult   = against_values;
+          yaw_mult    = with_values;
         break;
         case 3:
-          pitch_mult  = against_rc_values;
-          roll_mult   = with_rc_values;
-          yaw_mult    = against_rc_values;
+          pitch_mult  = against_values;
+          roll_mult   = with_values;
+          yaw_mult    = against_values;
         break;
       }
     }
@@ -156,44 +148,43 @@ void ESCController::loop() {
     double p =    pitch * pitch_mult;
     double r =    roll * roll_mult;
     double y =    yaw * yaw_mult;
-//    double t1 =   thr_p * INFLUENCE_THROTTLE;
-//    double t2 =   ((p + r + y) / 3) * INFLUENCE_STABILIZATION
-//    double t =    t1 + t2;
-    double t = thr_p + ((p + r + y) / 3); // totals 2.0 but this allows PID to take max throttle TODO: introduce max throttle buffer
+    double t = thr_p + ((p + r + y) / 3); // totals 2.0 but this allows PID to take max throttle in moments when needed (until max buffer kicks in)
     if(t > 1) t = 1;
 
-    // todo: calculate for max pwm buffer here
+    // todo: I'm going to have to calculate the pwm for each motor BEFORE the loop, then add a max buffer if any pwms are above the max (bring the others dowm proportionately) -jkr
 
-    if(false) {// && this->_rc->isOn()) {
-      Serial.print(i);
-      Serial.print(":\t");
-      Serial.print(thr_p);
-      Serial.print("\t");
-      Serial.print(p);
-      Serial.print("\t");
-      Serial.print(r);
-      Serial.print("\t");
-      Serial.print(y);
-      Serial.print("\t");
-      Serial.println(t);
+    if(false) { // "visual" debug -jkr
+//      t = thr_p;
+      switch(i) {
+        case 0:
+          Serial.println(F(" "));
+          Serial.print(F("-----------"));
+          Serial.print(F(" "));
+          Serial.print(p);
+          Serial.print(F(" "));
+          Serial.print(r);
+          Serial.print(F(" "));
+          Serial.print(y);
+          Serial.print(F(" "));
+          Serial.println(F("------------"));
+          Serial.println(F(" "));
+        case 2:
+          Serial.print(t);
+          Serial.print(F("\t\t"));
+        break;
+        case 1:
+          Serial.println(t);
+          Serial.println(F(" "));
+          Serial.print("\t");
+          Serial.print(thr_p);
+          Serial.println(F(" "));
+          Serial.println(F(" "));
+        break;
+        case 3:
+          Serial.println(t);
+        break;
+      }
     }
-
-    if(false && i == 0) { // for a specific arm
-      Serial.print(thr_p);
-      Serial.print(F("\t"));
-      Serial.print(p);
-      Serial.print(F("\t"));
-      Serial.print(r);
-      Serial.print(F("\t"));
-      Serial.println(t);
-      
-      t = thr_p;// DEBUG - send out throttle value only (no pid compensation / no stabilization) -jkr
-    }
-
-#ifdef SERIAL_IN
-    if(rin_val > -1)
-      o->setPWM(rin_val);
-#endif
 
     if(this->_rc->isOn() == true || this->_ros->isOn() == true)
       o->setPWMPerc(t);
@@ -203,5 +194,6 @@ void ESCController::loop() {
 
     o->loop();
   }
+//      delay(5);
 }
 
