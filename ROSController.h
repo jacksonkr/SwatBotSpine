@@ -1,16 +1,19 @@
-//#include <ros.h> // https://github.com/ros-drivers/rosserial/blob/jade-devel/rosserial_arduino/src/ros_lib/ros.h
-//#include <std_msgs/String.h>
+#ifdef ROS_C_ENABLED
+
+#include <ros.h> // https://github.com/ros-drivers/rosserial/blob/jade-devel/rosserial_arduino/src/ros_lib/ros.h
+#include <std_msgs/Empty.h>
 
 class ROSController {
   protected:
-//    std_msgs::String str_msg;
-//    ros::NodeHandle _nh;
+    ros::Subscriber<std_msgs::Empty> sub;
+    ros::NodeHandle _nh;
+    static void setPRYCallback( const std_msgs::Empty& );
     int _throttle;
     bool _is_on = false;
   public:
-    void loop();
     ROSController();
-    double* getAttitude();
+    void loop();
+    float* getAttitude();
     bool isOn() {
       return this->_is_on;
     }
@@ -23,24 +26,33 @@ class ROSController {
 
 const int ROSController::THR_MAX = 100;
 
-ROSController::ROSController() {
+void ROSController::setPRYCallback( const std_msgs::Empty& toggle_msg) {}
 
-//  ros::Publisher chatter("chatter", &str_msg);
-  
-//  this->_nh.initNode();
-//  this->_nh.advertise(chatter);
+ROSController::ROSController() : sub("setPRY", &setPRYCallback )  {
+  this->_nh.initNode();
+  this->_nh.subscribe(sub);
 }
 
-double* ROSController::getAttitude() {
-  return new double[3]{0, 0, 0};
+float* ROSController::getAttitude() {
+  return new float[3]{0, 0, 0};
 }
 
 void ROSController::loop() {
 //  Serial.print(F("ROS loop "));
 //  Serial.println(millis());
-  
-//  str_msg.data = new char[] {"hello"};
-//  chatter.publish( str_msg );
-//  this->_nh.spinOnce();
+
+  this->_nh.spinOnce();
+  delay(1000);
 }
 
+#else
+// dummy controller to appease the compiler
+class ROSController {
+  public:
+    ROSController();
+    bool isOn() { return false; };
+    float* getAttitude() { return new float[3] {0, 0, 0}; };
+    int getThrottlePerc() { return 0; };
+};
+ROSController::ROSController() {}
+#endif
