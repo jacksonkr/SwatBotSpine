@@ -1,3 +1,9 @@
+/**
+ * NOTES
+ * Orientation of Adafruit LSM303 matchs by the orientation of the font on the board - nose up is positive pitch, left wing up is positive roll
+ * 
+ */
+
 #include <Wire.h>
 #include <EEPROM.h>
 #include <Adafruit_Sensor.h>
@@ -5,22 +11,27 @@
 #include <Adafruit_BMP085_U.h>
 #include <Adafruit_L3GD20_U.h>
 #include <Adafruit_10DOF.h>
-#include <KalmanFilter.h>
+//#include <KalmanFilter.h>
+#include <Kalman.h>
 
 class IMUController {
   protected:
     bool _initialized = false;
-    KalmanFilter _kalmanPitch = KalmanFilter();
-    KalmanFilter _kalmanRoll = KalmanFilter();
-    KalmanFilter _kalmanHeading = KalmanFilter();
+    JacksonSimpleFilter _jsfPitch;
+    JacksonSimpleFilter _jsfRoll;
+    JacksonSimpleFilter _jsfHeading;
+    void adustForFront(float*); //todo: pass arr[3] of xyz or pry and adust the xy/pr for where the front_is_facing -jkr
     int _set_ground_loop_count = 0;
+    /**
+     * handle set_ground using the constructor, code is already there.
+     */
     int _set_ground = 0;
     double _groundPR[2] = {0, 0};
     /**
      * substracted from gyro outputs to zero them out
      * todo: make this dynamic and potentially apply kalman -jkr
      */
-    double _groundGyro[3] = {-0.048, 0.03, 0.074}; // relative to the chip
+    float _groundGyro[3] = {-0.057, 0.0315, 0.075}; // relative to the chip
     sensor_t sensor;
     Adafruit_10DOF                dof   = Adafruit_10DOF();
     Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
@@ -30,76 +41,31 @@ class IMUController {
     float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
     double _attitude[3];
     double _gyro[3];
-    void getGroundedPR(double*);
-    void setGroundedPR(double, double);
+    void getGroundedPR(float*);
+    void setGroundedPR(float, float);
     void setFront(int);
   public:
+    static int front_is_facing;
+    
     IMUController();
-    void setAttitude(double p, double r, double y) {
-      if(FRONT == 90) {
-        if(this->_groundPR[0] != 0.00) r -= this->_groundPR[0];
-        if(this->_groundPR[1] != 0.00) p -= this->_groundPR[1];
-      } else {
-        if(this->_groundPR[0] != 0.00) p -= this->_groundPR[0];
-        if(this->_groundPR[1] != 0.00) r -= this->_groundPR[1];
-      }
-
-      if(false) {
-        Serial.print(F("IMU->setAttitude "));
-        Serial.print(p);
-        Serial.print("\t");
-        Serial.print(r);
-        Serial.print("\t");
-        Serial.println(y);
-      }
-      
-      this->_attitude[0] = p;
-      this->_attitude[1] = r;
-      this->_attitude[2] = y;
-    }
-    void setGyro(double x, double y, double z) {
-      if(false) {
-        Serial.print(F("IMU->setGyro "));
-        Serial.print(x);
-        Serial.print(F(" "));
-        Serial.print(y);
-        Serial.print(F(" "));
-        Serial.print(z);
-      }
-      
-      this->_gyro[0] = x;
-      this->_gyro[1] = y;
-      this->_gyro[2] = z;
-    }
+    float* getAttitude();
+    void setAttitude(float, float, float);
+    void setGyro(double, double, double);
     bool getInitialized();
-    double* getFilteredAttitude() {
-      double p, r, y;
-      
-      p = this->_attitude[0];
-      r = this->_attitude[1];
-      y = this->_attitude[2];
-      
-      return new double[3]{p, r, y};
-    }
-    double* getGroundedGyroOutput() {
-      double x, y, z;
-
-      x = this->_gyro[0] - this->_groundGyro[0];
-      y = this->_gyro[1] - this->_groundGyro[1];
-      z = this->_gyro[2] - this->_groundGyro[2];
-
-      return new double[3]{x, y, z};
-    }
+    float* getGyro();
     void loop();
 };
 
+// 1, 1 is nose up and right wing down // https://en.wikipedia.org/wiki/Flight_dynamics_(fixed-wing_aircraft) -jkr
+int IMUController::front_is_facing = -180; // changeable by UI (when there is one) -jkr
+
 IMUController::IMUController() {
 
-  gyro.enableAutoRange(true);
+  gyro.enableAutoRange(false);
 
-  if (false) { // debug set grounded
+  if (false) { // debug set grounded !! WRITES TO EEPROM -jkr
     this->_set_ground = 1;
-    Serial.println("!! SET GROUNDED IS ON !!  IMUController::set_ground = true");
+    Serial.println("!! SET GROUNDED IS ON !!  IMUController::set_ground = true");\
   }
 
   if (!accel.begin())
@@ -108,18 +74,21 @@ IMUController::IMUController() {
     Serial.println(F("Ooops, no LSM303 detected ... Check your wiring!"));
     while (1);
   }
+
   if (!mag.begin())
   {
     /* There was a problem detecting the LSM303 ... check your connections */
     Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
     while (1);
   }
+  
   if (!bmp.begin())
   {
     /* There was a problem detecting the BMP180 ... check your connections */
     Serial.println("Ooops, no BMP180 detected ... Check your wiring!");
     while (1);
   }
+  
   if(!gyro.begin())
   {
     /* There was a problem detecting the L3GD20 ... check your connections */
@@ -133,25 +102,132 @@ IMUController::IMUController() {
   bmp.getSensor(&sensor);
 }
 
+/**
+ * returns attitude both filtered and normalized (grounded)
+ */
+float* IMUController::getAttitude() {
+  float p, r, y;
+
+  // 90 same
+  // -180 switch both, reverse roll
+  // 270 switch both, reverse both
+  // 0 / 360 switch both, reverse pitch
+  if(front_is_facing == -180) {
+    p = (this->_attitude[1] - this->_groundPR[1]) * -1; // convert pitch to roll
+    r = this->_attitude[0] - this->_groundPR[0]; // convert roll to pitch and reverse it
+  } else if(front_is_facing == 90) { // normal layout
+    p = this->_attitude[1] - this->_groundPR[1];
+    r = this->_attitude[0] - this->_groundPR[0];
+  }
+  y = this->_attitude[2];
+
+  if(false) {
+    Serial.print(F("IMUController->getAttitude: "));
+    Serial.print(p);
+    Serial.print(F(", "));
+    Serial.print(r);
+    Serial.print(F(", "));
+    Serial.println(y);
+  }
+  
+  return new float[3]{p, r, y};
+}
+
+/**
+ * attitudes are set based on objective chip orientation. "front_is_facing" is only applied to output (getAttitdue() output) -jkr
+ */
+void IMUController::setAttitude(float p, float r, float y) {
+  if(true) {
+    Serial.print(F("IMUController->setAttitude: ")); // accounts for hardware, not for "front_is_facing" yet. -jkr
+    Serial.print(p);
+    Serial.print(", ");
+    Serial.print(r);
+    Serial.print(", ");
+    Serial.println(y);
+  }
+  
+  this->_attitude[0] = p;
+  this->_attitude[1] = r;
+  this->_attitude[2] = y;
+}
+
+void IMUController::setGyro(double x, double y, double z) {
+  if(false) {
+    Serial.print(F("IMU->setGyro "));
+    Serial.print(x);
+    Serial.print(F(" "));
+    Serial.print(y);
+    Serial.print(F(" "));
+    Serial.println(z);
+  }
+  
+  this->_gyro[0] = x;
+  this->_gyro[1] = y;
+  this->_gyro[2] = z;
+}
+
+/**
+ * returns gyro normalized (grounded)
+ * unbiased raw values: pitch(x) nose thrust up is + and roll(y) left wing thrust up is +
+ */
+float* IMUController::getGyro() {
+  double x, y, z;
+
+  if(false) { // not-grounded not-normalized
+    Serial.print(this->_gyro[0]);
+    Serial.print(F(" "));
+    Serial.print(this->_gyro[1]);
+    Serial.print(F(" "));
+    Serial.println(this->_gyro[2]);
+  }
+
+  if(IMUController::front_is_facing == -180) { // left a quarter turn
+    x = (this->_gyro[1] - this->_groundGyro[1]) * -1;
+    y = this->_gyro[0] - this->_groundGyro[0];
+  } else if(IMUController::front_is_facing == 90) { // normal
+    x = this->_gyro[0] - this->_groundGyro[0];
+    y = this->_gyro[1] - this->_groundGyro[1];
+  }
+  z = this->_gyro[2] - this->_groundGyro[2];
+
+  if(false) { // normalized
+    Serial.print(x);
+    Serial.print(F(" "));
+    Serial.print(y);
+    Serial.print(F(" "));
+    Serial.println(z);
+  }
+
+  return new float[3]{x, y, z};
+}
+
 bool IMUController::getInitialized() {
-  double g[2] = {0, 0};
+  float g[2] = {0, 0};
   this->getGroundedPR(g);
 
   if (false) {
-    Serial.print("Getting IMU ground: ");
+    Serial.print(F("IMU ground values: "));
     Serial.print(g[0]);
-    Serial.print(" ");
+    Serial.print(F(" "));
     Serial.println(g[1]);
   }
 
   if (g[0] == 0 || g[1] == 0) return false;
   this->_groundPR[0] = g[0];
   this->_groundPR[1] = g[1];
+
+  if (false) {
+    Serial.print(F("grounded IMU values: "));
+    Serial.print(this->_groundPR[0]);
+    Serial.print(F(" "));
+    Serial.println(this->_groundPR[1]);
+  }
+  
   return true;
 }
 
-void IMUController::getGroundedPR(double* g) {
-  double ret[2] = {0, 0};
+void IMUController::getGroundedPR(float* g) {
+  float ret[2] = {0, 0};
 
   EEPROM.get(EEPROM_ADDRESS_IMU_GROUNDED, ret);
 
@@ -159,12 +235,12 @@ void IMUController::getGroundedPR(double* g) {
   g[1] = ret[1];
   // memcpy(g, ret, 2);
 }
-void IMUController::setGroundedPR(double p, double r) {
-  Serial.print("Setting IMU ground: ");
-
-  double pr[2] = {p, r};
+void IMUController::setGroundedPR(float p, float r) {
+  float pr[2] = {p, r};
+  
+  Serial.print(F("Setting IMU ground: "));
   Serial.print(p);
-  Serial.print(" ");
+  Serial.print(F(" "));
   Serial.println(r);
   EEPROM.put(EEPROM_ADDRESS_IMU_GROUNDED, pr);
 }
@@ -174,7 +250,7 @@ void IMUController::setFront(int angle) {
   // right now this is set to a const on the .ino
 
   Serial.println();
-  //  EEPROM.write(EEPROM_ADDRESS_IMU_FRONT, arr);
+//    EEPROM.write(EEPROM_ADDRESS_IMU_FRONT, arr);
 }
 
 void IMUController::loop() {
@@ -191,72 +267,74 @@ void IMUController::loop() {
 
   if (dof.fusionGetOrientation(&accel_event, &mag_event, &orientation))
   {
-    /**
-       set what the IMU is reporting when it's grounded & motors off
-    */
-    if(this->_initialized == false) {
-      this->_initialized = true;
-      this->_kalmanPitch.setValue(orientation.pitch);
-      this->_kalmanRoll.setValue(orientation.roll);
-      this->_kalmanHeading.setValue(orientation.heading);
-    } else {
-      this->_kalmanPitch.loop(orientation.pitch);
-      this->_kalmanRoll.loop(orientation.roll);
-      this->_kalmanHeading.loop(orientation.heading);
-    }
-    if (this->_set_ground == 1) {
-      if (orientation.pitch != 0.00 && orientation.roll != 0.00) {
-        Serial.println("!! set ground kalman init");
-        this->_set_ground = 2;
-      }
-    }
-    //Serial.println(this->_kalmanGroundPitch->getX());
-    if (this->_set_ground == 2) {
-      if (false) {
-        Serial.print("!! set ground kalman update ");
-        Serial.print(_set_ground_loop_count);
-        Serial.print(" ");
-        Serial.print(orientation.pitch);
-        Serial.print(" ");
-        Serial.print(this->_kalmanPitch.getX());
-        Serial.println();
-      }
 
-      if (++this->_set_ground_loop_count > 100)
-        this->_set_ground = 3;
-    }
-
-    if (this->_set_ground == 3) {
-      this->_set_ground = -1;
-      if (false) {
-        Serial.print("!! set ground kalman finish ");
-        Serial.print(orientation.pitch);
-        Serial.print(" ");
-        Serial.print(this->_kalmanPitch.getX());
-        Serial.println();
-      }
-      this->setGroundedPR(this->_kalmanPitch.getX(), this->_kalmanRoll.getX());
-    }
-
-    if (false) { // raw attitude debug
-      /* 'orientation' should have valid .roll and .pitch fields */
-      Serial.print(F("Orientation: "));
+    // values of attitude before transforming for position of "front_is_facing" (unbiased attitude) -jkr
+    if(false) { // unbiased attitude debug
       Serial.print(orientation.pitch);
       Serial.print(F(" "));
       Serial.print(orientation.roll);
       Serial.print(F(" "));
       Serial.println(orientation.heading);
     }
+    
+    /**
+       set what the IMU is reporting when it's grounded & motors off
+    */
+    
+    // !! pitch/roll are switched for LSM303 -jkr
+    float pv = orientation.pitch;
+    orientation.pitch = orientation.roll;
+    orientation.roll = pv;
 
-    // using raw attitudes
-//    this->setAttitude(orientation.pitch, orientation.roll, orientation.heading);
-    // using kalman filter
-//    this->setAttitude(this->_kalmanPitch.getX(), this->_kalmanRoll.getX(), this->_kalmanHeading.getX());
+    if(this->_initialized == false) {
+      this->_initialized = true;
+      this->_jsfPitch.setInitialValue(orientation.pitch);
+      this->_jsfRoll.setInitialValue(orientation.roll);
+      this->_jsfHeading.setInitialValue(orientation.heading);
+    } else {
+      this->_jsfPitch.shiftValue(orientation.pitch);
+      this->_jsfRoll.shiftValue(orientation.roll);
+      this->_jsfHeading.shiftValue(orientation.heading);
+        
+      if (this->_set_ground == 1) {
+        if (orientation.pitch != 0.00 && orientation.roll != 0.00) {
+  //        Serial.println("set ground kalman init");
+          this->_set_ground = 2;
+        }
+      }
+      //Serial.println(this->_kalmanGroundPitch->getX());
+      if (this->_set_ground == 2) {
+        if (++this->_set_ground_loop_count > 100) 
+          this->_set_ground = 3;
+      }
+  
+      if (this->_set_ground == 3) {
+        this->_set_ground = -1;
+          
+        this->setGroundedPR(this->_jsfPitch.getFilterValue(), this->_jsfRoll.getFilterValue());
+        
+        Serial.print(F("set ground kalman finish: "));
+        Serial.print(orientation.pitch);
+        Serial.print(F(" "));
+        Serial.println(this->_jsfPitch.getFilterValue());
+        Serial.println(F("!!"));
+        Serial.println(F("!! NOW STOP WRITING TO THE EEPROM BEFORE YOU RUIN IT, QUITTING PROGRAM"));
+        Serial.println(F("!!"));
+  
+        while(1);
+      }
 
-    //todo: make this dynamic
-    if(FRONT == 90) {
-      this->setAttitude(this->_kalmanRoll.getX(), this->_kalmanPitch.getX(), this->_kalmanHeading.getX());
+      if(false) { // debug
+        Serial.print(orientation.pitch);
+        Serial.print(F(" "));
+//        Serial.println(kp);
+        Serial.println(this->_jsfPitch.getFilterValue());
+      }
+      
+      this->setAttitude(this->_jsfPitch.getFilterValue(), this->_jsfRoll.getFilterValue(), this->_jsfHeading.getFilterValue());
     }
+
+    // get gyro info -jkr
 
     if(false) {
       Serial.print(F("gyro: "));
