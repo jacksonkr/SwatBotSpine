@@ -18,7 +18,7 @@ class ESC {
     bool getInitialized() {
       return this->_init_time > 0;
     }
-    void setPWMPerc(double);
+    void setPWMPerc(float);
     void setPWM(int, bool);
     int getPWM() {
       return this->_pwm;
@@ -33,11 +33,11 @@ class ESC {
 };
 
 const int ESC::INIT_MOTOR_INTERMISSION = 20; // time before and after high low during intermission -jkr
-const int ESC::PWM_MAX = 180; // max pwm but this sends a slow kill to the motors
-const int ESC::PWM_HIGH = 160; // fastest documented pwm to spin motor
-const int ESC::PWM_LOW = 50; // lowest documented pwm to spin motor
-const int ESC::PWM_NOSPIN = 25; // has to be somewhere between esc config off (stop) and low (slow spin) -jkr
-const int ESC::PWM_OFF = 0;
+const int ESC::PWM_MAX = 180; // max pwm but this sends a slow kill to the motors -jkr
+const int ESC::PWM_HIGH = 160; // fastest documented pwm to spin motor -jkr
+const int ESC::PWM_LOW = 30; // once armed, the motors never go below this value -jkr
+const int ESC::PWM_NOSPIN = 20; // has to be somewhere between esc config off (stop) and low (slow spin) -jkr
+const int ESC::PWM_OFF = 0; // sends slow kill to motors
 
 ESC::ESC(int id) {
   this->_id = id;
@@ -69,27 +69,28 @@ void ESC::setPWM(int pwm, bool bypass = false) {
     return;
   }
 
-  if(pwm < ESC::PWM_LOW && this->beyondInitPad() == true) pwm = ESC::PWM_LOW; // keep the motors from slowing to a stop in flight
-  if(pwm > ESC::PWM_HIGH) pwm = ESC::PWM_HIGH;
+  if(pwm < ESC::PWM_LOW && this->beyondInitPad() == true) pwm = ESC::PWM_LOW; // keep the motors from stopping while armed
+  if(pwm > ESC::PWM_HIGH && armed == true && bypass != true) pwm = ESC::PWM_HIGH;
   
   if(this->_pwm != pwm) { // only send a pwm change if the pwm has actually changed -jkr
     if(armed == true || bypass == true) {
       this->_pwm = pwm;
       this->_servo.write(pwm);
   
-      if(false && this->_id == 0) { // debug
+      if(false) { // && this->_id == 0) { // debug
         Serial.print(this->_id);
         Serial.print(F(" "));
         Serial.print(this->_pin);
-        Serial.print("\t");
+        Serial.print(F("\t"));
         Serial.println(pwm);
       }
     }
   }
 }
 
-void ESC::setPWMPerc(double p) {
+void ESC::setPWMPerc(float p) {
     int v = 0; // = p * ESC::PWM_MAX;
+    if(p < 0) p = 0; // don't let it go negative
     v = map(p * 100, 0, 100, ESC::PWM_LOW, ESC::PWM_HIGH); // use high, not max. max will shut off motors -jkr
     this->setPWM(v);
 
@@ -105,7 +106,6 @@ void ESC::setPWMPerc(double p) {
 void ESC::loop() {
   // attempt init
   if(millis() > TIME_INIT_MILLIS && this->_init_time < 0) { // first init
-    
     this->setPWM(ESC::PWM_MAX, true);
     delay(ESC::INIT_MOTOR_INTERMISSION);
     this->setPWM(ESC::PWM_NOSPIN, true);
