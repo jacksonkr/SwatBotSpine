@@ -1,3 +1,7 @@
+/**
+ * Right Stick to bottom right is 1, 1
+ */
+
 class RemoteControl {
   protected:
     Channel* _channels[NUM_RC_CHANNELS];
@@ -13,7 +17,7 @@ class RemoteControl {
     int addChannel(Channel* ch);
     void loop();
     void setup();
-    double* getAttitude();
+    float* getAttitude();
     bool isOn() {
       return this->_remote_is_on;
     }
@@ -32,11 +36,11 @@ RemoteControl::RemoteControl() {
     this->addChannel(new Channel(Channel::AUX2, RC_Channel_Pin[5], 990, 2000));
 }
 
-double* RemoteControl::getAttitude() {
+float* RemoteControl::getAttitude() {
   // figure desired euler from RX
-  double ele_p = this->getChannel(Channel::ELEVATOR)->getPerc();
-  double ail_p = this->getChannel(Channel::AILERON)->getPerc();
-  double rud_p = this->getChannel(Channel::RUDDER)->getPerc();
+  float ele_p = this->getChannel(Channel::ELEVATOR)->getPerc();
+  float ail_p = this->getChannel(Channel::AILERON)->getPerc();
+  float rud_p = this->getChannel(Channel::RUDDER)->getPerc();
 
   if(false) { // debug
     Serial.print(ele_p);
@@ -57,8 +61,9 @@ double* RemoteControl::getAttitude() {
     Serial.println();
   }
 
-  double p, r, y;
+  float p, r, y;
 
+  // convert range from 0:1 to -1:1 -jkr
   p = (ele_p - 0.5) * 2 * PITCH_MAX;
   r = (ail_p - 0.5) * 2 * ROLL_MAX;
   y = (rud_p - 0.5) * 2 * YAW_MAX;
@@ -71,15 +76,21 @@ double* RemoteControl::getAttitude() {
     Serial.println(y);
   }
 
-  return new double[3]{p, r, y};
+  return new float[3]{p, r, y};
 }
 
 /**
  * return channel index
  */
 int RemoteControl::addChannel(Channel* ch) {
+  
 //  ch->addRemoteControl(this);
   this->_channels[this->_channels_length++] = ch;
+  
+  if(false) {
+    Serial.print(F("Add Channel. Length: "));
+    Serial.println(this->_channels_length);
+  }
 
   return this->_channels_length;
 }
@@ -100,7 +111,10 @@ Channel* RemoteControl::getChannel(const char* type) {
   return NULL;
 }
 
-// the remote always reports 0 when off but sometimes (rarely) reports 0 when on; this is a filter for that small error
+/** 
+ * the remote always reports 0 when off but sometimes (rarely) 
+ * reports 0 when on; this is a filter for that small error -jkr 
+ */
 void RemoteControl::filterRemoteOnError() {
   // keep track of of receiver activity to compensate for error; sometimes the rc reports 0 when it should report 1 -jkr
   int len = sizeof(this->_channel_receive_info_arr) / sizeof(*this->_channel_receive_info_arr);
@@ -119,14 +133,19 @@ void RemoteControl::filterRemoteOnError() {
 }
 
 void RemoteControl::loopChannels() {
+//  Serial.println(this->_channels_length);
+  
   for(int i = 0; i < this->_channels_length; ++i) {
     Channel* o = this->_channels[i];
     o->loop();
 
     if(false) { // rc debug
+      Serial.print(o->getType());
+      Serial.print(F("\t\t"));
       Serial.print(o->getValue());
-      Serial.print(" ");
-      Serial.println(millis());
+      Serial.print(F(" "));
+//      Serial.print(millis());
+      Serial.println();
 
       if(i >= this->_channels_length - 1) Serial.println();
     }
@@ -134,7 +153,7 @@ void RemoteControl::loopChannels() {
 }
 
 void RemoteControl::loop() {
-//  Serial.print("RC Loop");
+//  Serial.println("RC Loop");
 
   this->filterRemoteOnError();
 
